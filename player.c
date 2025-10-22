@@ -13,7 +13,7 @@ struct Player {
     int position_y;
 };
 
-static struct Player player = {1, 5, 5, 3, 3};
+struct Player player = {1, 5, 5, 3, 3};
 
 void player_gain_potion_rewards(void) {
     player.level++;

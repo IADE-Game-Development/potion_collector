@@ -1,7 +1,7 @@
 #include "map.h"
 #include <stdio.h>
 
-static char map_data[MAP_ROWS][MAP_COLS] = {
+char map_data[MAP_ROWS][MAP_COLS] = {
     {'W', 'W', 'W', 'W', 'W', 'W', 'W', 'W', 'W', 'W', 'W', 'W'},
     {'W', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'W'},
     {'W', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'W'},
