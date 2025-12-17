@@ -1,14 +1,24 @@
 # Commands
-# make        -> builds debug (default)
-# make debug  -> debug build
-# make release-> optimized build
-# make run    -> builds debug then runs ./app (or .exe)
-# make clean  -> deletes .o, .d, and app
+# make           -> builds debug (default)
+# make debug     -> debug build
+# make release   -> optimized build
+# make run       -> builds debug then runs ./app (or .exe)
+# make build     -> creates Build/ folder with exe + assets (+ DLLs on MSYS2)
+# make clean     -> deletes .o, .d, and app
+
+# ---------------- Build bundle config ----------------
+# PATH THAT WILL BE CREATED
+BUILD_DIR := Build
+
+# FOLDERS TO INCLUDE IN THE BUILD PATH
+ASSET_DIRS := Maps Assets Assets/Sounds Assets/Sprites
+
+# INDIVIDUAL FILES TO INCLUDE IN THE BUILD PATH
+ASSET_FILES :=
 
 # ---------------- Platform detection ----------------
 UNAME_S := $(shell uname -s)
 
-# Assume MSYS2 MinGW64 if MSYSTEM is set (e.g., "MINGW64")
 ifdef MSYSTEM
     IS_MSYS2 := 1
 endif
@@ -36,7 +46,6 @@ endif
 PKG_CFLAGS := $(shell $(PKGCONF) --cflags $(SDL_PKG) 2>/dev/null)
 PKG_LIBS   := $(shell $(PKGCONF) --libs   $(SDL_PKG) 2>/dev/null)
 
-# Fallback if pkg-config isn't found/configured (shouldn't be needed if you installed it)
 ifeq ($(PKG_LIBS),)
     PKG_LIBS := -lSDL3 -lSDL3_image
 endif
@@ -47,41 +56,81 @@ WARN := -Wall -Wextra -Wpedantic
 DEPS := -MMD -MP
 INC  := -Isource -Iutils
 
-# Debug and Release flags
 DBG := -g -O0 -fno-omit-frame-pointer
 REL := -O2 -DNDEBUG
 
-# Project structure
-# Top-level C files plus sources in source/ and utils/
 SRC := $(wildcard *.c) $(wildcard **/*.c)
 OBJ := $(SRC:.c=.o)
 DEP := $(OBJ:.o=.d)
+
 BIN := app
 
-.PHONY: all debug release run clean
+# Add .exe on MSYS2 builds if you want:
+ifdef IS_MSYS2
+    BIN_EXE := $(BIN).exe
+else
+    BIN_EXE := $(BIN)
+endif
 
-# Default: debug
+.PHONY: all debug release run clean build build-rel
+
 all: debug
 
 debug: CFLAGS := $(CSTD) $(WARN) $(DBG) $(DEPS) $(INC) $(PKG_CFLAGS)
 debug: LDFLAGS := $(PKG_LIBS)
-debug: $(BIN)
+debug: $(BIN_EXE)
 
 release: CFLAGS := $(CSTD) $(WARN) $(REL) $(DEPS) $(INC) $(PKG_CFLAGS)
 release: LDFLAGS := $(PKG_LIBS)
-release: $(BIN)
+release: $(BIN_EXE)
 
-$(BIN): $(OBJ)
+$(BIN_EXE): $(OBJ)
 	$(CC) $(OBJ) $(LDFLAGS) -o $@
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 run: debug
-	./$(BIN)
+	./$(BIN_EXE)
+
+# --------- Bundle target (debug by default) ----------
+build: debug bundle
+
+build-rel: release bundle
+
+bundle:
+	@mkdir -p $(BUILD_DIR)
+	@cp -f $(BIN_EXE) $(BUILD_DIR)/
+	@for d in $(ASSET_DIRS); do \
+		if [ -d "$$d" ]; then \
+			mkdir -p "$(BUILD_DIR)/$$(dirname "$$d")"; \
+			cp -R "$$d" "$(BUILD_DIR)/$$(dirname "$$d")/"; \
+		fi; \
+	done
+	@for f in $(ASSET_FILES); do \
+		if [ -f "$$f" ]; then \
+			mkdir -p "$(BUILD_DIR)/$$(dirname "$$f")"; \
+			cp -f "$$f" "$(BUILD_DIR)/$$f"; \
+		fi; \
+	done
+
+# Optional: copy SDL runtime DLLs when building on MSYS2/MinGW
+# (Your exe needs DLLs next to it unless you ship static or depend on PATH.)
+ifdef IS_MSYS2
+bundle: copy-dlls
+
+copy-dlls:
+	@echo "Copying runtime DLLs into $(BUILD_DIR)/ ..."
+	@# If you have ldd available, this is the easiest generic approach:
+	@# - list DLL dependencies
+	@# - copy anything that lives under your MSYS2/mingw prefix
+	@ldd $(BIN_EXE) | awk '/mingw64|clang64|ucrt64/ {print $$3}' | grep -iE '\.dll$$' | while read f; do \
+		cp -f "$$f" "$(BUILD_DIR)/"; \
+	done
+endif
 
 clean:
-	rm -f $(OBJ) $(DEP) $(BIN)
+	rm -f $(OBJ) $(DEP) $(BIN) $(BIN).exe
+	rm -rf $(BUILD_DIR)
 
-# Auto-include header dependencies
 -include $(DEP)
